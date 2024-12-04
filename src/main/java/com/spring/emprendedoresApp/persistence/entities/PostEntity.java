@@ -1,6 +1,9 @@
 package com.spring.emprendedoresApp.persistence.entities;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.PastOrPresent;
 import java.time.LocalDateTime;
 import java.util.Set;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
@@ -9,145 +12,186 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 @Table(name = "posts")
 public class PostEntity {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	@Column(name = "post_id")
-	private Long id;
+    // ---------- Atributos de la entidad ----------
 
-	@Column(name = "title", nullable = false, length = 255)
-	private String title;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "post_id")
+    private Long id;
 
-	@Column(name = "content", nullable = false)
-	private String content;
+    @NotNull(message = "El título no puede ser nulo")
+    @Size(min = 1, max = 255, message = "El título debe tener entre 1 y 255 caracteres")
+    @Column(name = "title")
+    private String title;
 
-	@Column(name = "creation_date", columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
-	private LocalDateTime creationDate;
+    @NotNull(message = "El contenido no puede ser nulo")
+    @Size(min = 1, message = "El contenido no puede estar vacío")
+    @Column(name = "content")
+    private String content;
 
-	@Column(name = "validation_date")
-	private LocalDateTime validationDate;
+    @PastOrPresent(message = "La fecha de creación debe ser en el pasado o presente")
+    @Column(name = "creation_date", columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
+    private LocalDateTime creationDate;
 
-	@Column(name = "is_valido", nullable = false)
-	private boolean isValido; // Nuevo campo para marcar la validez de la publicación
+    @PastOrPresent(message = "La fecha de validación debe ser en el pasado o presente")
+    @Column(name = "validation_date")
+    private LocalDateTime validationDate;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "post_status", nullable = false)
-	private PostStatus postStatus;
+    @NotNull(message = "El campo de validez no puede ser nulo")
+    @Column(name = "is_valido")
+    private boolean isValido;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "post_type", nullable = false)
-	private PostType postType;
+    @Enumerated(EnumType.STRING)
+    @NotNull(message = "El estado de la publicación no puede ser nulo")
+    @Column(name = "post_status")
+    private PostStatus postStatus;
 
-	@ManyToOne
-	@JoinColumn(name = "author_id", nullable = false)
-	private UserEntity author;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "post_type")
+    private PostType postType;
 
-	@OneToMany(mappedBy = "post", cascade = CascadeType.REMOVE, orphanRemoval = true)
-	@JsonManagedReference("post-comments") // Serializa los comentarios desde la perspectiva de la publicación
-	private Set<CommentEntity> comments;
+    @ManyToOne
+    @JoinColumn(name = "author_id")
+    @NotNull(message = "El autor no puede ser nulo")
+    private UserEntity author;
 
-	public enum PostStatus {
-		IDEAS, STORIES, INVESTMENT, ADVICE, RESOURCES, OTHERS
-	}
+    @OneToMany(mappedBy = "post", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    @JsonManagedReference("post-comments") // Serializa los comentarios desde la perspectiva de la publicación
+    private Set<CommentEntity> comments;
 
-	public enum PostType {
-		PUBLISHED, PENDING, REJECTED
-	}
+    // ---------- Enumeraciones ----------
 
-	@PrePersist
-	public void prePersist() {
-		if (this.creationDate == null) {
-			this.creationDate = LocalDateTime.now();
-		}
-		if (this.postStatus == null) {
-			this.postStatus = PostStatus.OTHERS;
-		}
-		if (this.postType == null) {
-			this.postType = PostType.PENDING;
-		}
-		if (!this.isValido) {
-			this.isValido = false;
-		}
-	}
+    public enum PostStatus {
+        IDEAS, STORIES, INVESTMENT, ADVICE, RESOURCES, OTHERS
+    }
 
-	// ----------- Getters y Setters -----------
+    public enum PostType {
+        PUBLISHED, PENDING, REJECTED
+    }
 
-	public Long getId() {
-		return id;
-	}
+    // ---------- Métodos del ciclo de vida ----------
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    /**
+     * Método ejecutado antes de persistir una nueva entidad.
+     * Configura valores predeterminados para ciertos campos.
+     */
+    @PrePersist
+    public void prePersist() {
+        if (this.creationDate == null) {
+            this.creationDate = LocalDateTime.now();
+        }
+        if (this.postStatus == null) {
+            this.postStatus = PostStatus.OTHERS;
+        }
+        if (this.postType == null) {
+            this.postType = PostType.PENDING;
+        }
+        if (!this.isValido) {
+            this.isValido = false;
+        }
+    }
 
-	public String getTitle() {
-		return title;
-	}
+    /**
+     * Método ejecutado antes de actualizar una entidad existente.
+     * Realiza validaciones y actualiza valores específicos.
+     */
+    @PreUpdate
+    public void preUpdate() {
+        // Validar que la fecha de validación no sea anterior a la de creación
+        if (this.validationDate != null && this.validationDate.isBefore(this.creationDate)) {
+            throw new IllegalArgumentException("La fecha de validación no puede ser anterior a la fecha de creación.");
+        }
 
-	public void setTitle(String title) {
-		this.title = title;
-	}
+        // Si el estado es publicado, asegurarse de que sea válido
+        if (this.postType == PostType.PUBLISHED && !this.isValido) {
+            throw new IllegalArgumentException("Una publicación marcada como PUBLISHED debe ser válida.");
+        }
 
-	public String getContent() {
-		return content;
-	}
+        // Actualizar automáticamente la fecha de validación si está en blanco
+        if (this.isValido && this.validationDate == null) {
+            this.validationDate = LocalDateTime.now();
+        }
+    }
 
-	public void setContent(String content) {
-		this.content = content;
-	}
+    // ---------- Getters y Setters ----------
 
-	public LocalDateTime getCreationDate() {
-		return creationDate;
-	}
+    public Long getId() {
+        return id;
+    }
 
-	public void setCreationDate(LocalDateTime creationDate) {
-		this.creationDate = creationDate;
-	}
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-	public LocalDateTime getValidationDate() {
-		return validationDate;
-	}
+    public String getTitle() {
+        return title;
+    }
 
-	public void setValidationDate(LocalDateTime validationDate) {
-		this.validationDate = validationDate;
-	}
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-	public boolean isValido() {
-		return isValido;
-	}
+    public String getContent() {
+        return content;
+    }
 
-	public void setValido(boolean isValido) {
-		this.isValido = isValido;
-	}
+    public void setContent(String content) {
+        this.content = content;
+    }
 
-	public PostStatus getPostStatus() {
-		return postStatus;
-	}
+    public LocalDateTime getCreationDate() {
+        return creationDate;
+    }
 
-	public void setPostStatus(PostStatus postStatus) {
-		this.postStatus = postStatus;
-	}
+    public void setCreationDate(LocalDateTime creationDate) {
+        this.creationDate = creationDate;
+    }
 
-	public PostType getPostType() {
-		return postType;
-	}
+    public LocalDateTime getValidationDate() {
+        return validationDate;
+    }
 
-	public void setPostType(PostType postType) {
-		this.postType = postType;
-	}
+    public void setValidationDate(LocalDateTime validationDate) {
+        this.validationDate = validationDate;
+    }
 
-	public UserEntity getAuthor() {
-		return author;
-	}
+    public boolean isValido() {
+        return isValido;
+    }
 
-	public void setAuthor(UserEntity author) {
-		this.author = author;
-	}
+    public void setValido(boolean isValido) {
+        this.isValido = isValido;
+    }
 
-	public Set<CommentEntity> getComments() {
-		return comments;
-	}
+    public PostStatus getPostStatus() {
+        return postStatus;
+    }
 
-	public void setComments(Set<CommentEntity> comments) {
-		this.comments = comments;
-	}
+    public void setPostStatus(PostStatus postStatus) {
+        this.postStatus = postStatus;
+    }
+
+    public PostType getPostType() {
+        return postType;
+    }
+
+    public void setPostType(PostType postType) {
+        this.postType = postType;
+    }
+
+    public UserEntity getAuthor() {
+        return author;
+    }
+
+    public void setAuthor(UserEntity author) {
+        this.author = author;
+    }
+
+    public Set<CommentEntity> getComments() {
+        return comments;
+    }
+
+    public void setComments(Set<CommentEntity> comments) {
+        this.comments = comments;
+    }
 }

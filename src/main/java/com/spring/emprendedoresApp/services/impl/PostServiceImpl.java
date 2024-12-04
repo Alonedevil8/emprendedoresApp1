@@ -8,6 +8,11 @@ import com.spring.emprendedoresApp.services.IPostService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -87,5 +92,11 @@ public class PostServiceImpl implements IPostService {
             return postRepository.save(post);  // Guarda la publicación actualizada
         }
         return null;
+    }
+    
+    @Override
+    public Page<PostEntity> getPostsByStatus(PostEntity.PostStatus postStatus, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return postRepository.findByPostStatus(postStatus, pageable);
     }
 }

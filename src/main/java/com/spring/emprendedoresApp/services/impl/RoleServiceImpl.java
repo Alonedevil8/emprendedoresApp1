@@ -12,7 +12,6 @@ import java.util.List;
 @Service
 public class RoleServiceImpl implements IRoleService {
 
-    // Inyección de dependencias para el repositorio de usuarios
     @Autowired
     private UserRepository userRepository;
 
@@ -26,12 +25,10 @@ public class RoleServiceImpl implements IRoleService {
             roleEnum = RoleEntity.RoleName.valueOf(roleName.toUpperCase());
         } catch (IllegalArgumentException e) {
             // Si el String no corresponde a un valor válido en el Enum, lanzamos una excepción
-            // Puedes personalizar el mensaje o manejar el error de acuerdo a tus necesidades
             throw new IllegalArgumentException("Invalid role name: " + roleName);
         }
-        
+
         // Llamamos al repositorio para buscar los usuarios que tienen el rol especificado
-        // Pasamos el Enum como argumento para hacer la búsqueda en la base de datos
         return userRepository.findByRole_RoleName(roleEnum);
     }
 }

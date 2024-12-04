@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "comments")
@@ -13,19 +15,21 @@ public class CommentEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "comment_id")
     private Long id;
-
-    @Column(name = "text", nullable = false, length = 500)
+    
+    @NotNull(message = "El Comentario no puede ser nulo")
+    @Size(min = 1, max = 255, message = "El Comentario debe tener entre 1 y 255 caracteres")
+    @Column(name = "text")
     private String text;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    @JsonBackReference("user-comments") // Evita la recursión para los comentarios desde la perspectiva del usuario
+    @JoinColumn(name = "user_id")
+    @JsonBackReference("user-comments")
     private UserEntity user;
 
     @ManyToOne
-    @JoinColumn(name = "post_id")  // La columna post_id hará referencia a PostEntity
+    @JoinColumn(name = "post_id")
     @JsonBackReference("post-comments")
-    private PostEntity post; // Este es el campo que falta
+    private PostEntity post; 
 
     @Column(name = "creation_date", columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime creationDate;

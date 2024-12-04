@@ -24,10 +24,9 @@ public class RoleEntity {
 
     // Enum para los nombres de roles
     public enum RoleName {
-    	COMPANY, 
-        ENTREPRENEUR, 
-        INVESTOR, 
-        OTHER
+        ROLE_USER,
+        ROLE_ADMIN,
+        ROLE_EDITOR
     }
 
     // Getters y Setters

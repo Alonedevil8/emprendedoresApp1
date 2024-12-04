@@ -2,6 +2,10 @@ package com.spring.emprendedoresApp.persistence.entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -9,50 +13,54 @@ import java.util.Set;
 @Table(name = "users")
 public class UserEntity {
 
-    // --- Enum definition for Access Levels ---
-    public enum AccessLevel {
-        NONE,     // No additional permissions
-        EDITOR,   // Permissions to edit content
-        ADMIN     // Administrative permissions
-    }
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
     private Long id;
 
-    @Column(name = "username", nullable = false, length = 50)
+    @NotNull(message = "El nombre de usuario no puede ser nulo")
+    @Size(min = 3, max = 50, message = "El nombre de usuario debe tener entre 3 y 50 caracteres")
+    @Column(name = "username")
     private String username;
 
-    @Column(name = "email", nullable = false, unique = true, length = 100)
+    @NotNull(message = "El correo no puede ser nulo")
+    @Email(message = "El correo debe ser válido")
+    @Column(name = "email", unique = true)
     private String email;
 
-    @Column(name = "password", nullable = false, length = 255)
+    @NotNull(message = "La contraseña no puede ser nula")
+    @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
+    @Column(name = "password")
     private String password;
 
-    @Column(name = "phone", length = 255)
+    @NotNull(message = "El teléfono no puede ser nulo")
+    @Size(min = 1, max = 255, message = "El teléfono debe tener entre 1 y 255 caracteres")
+    @Column(name = "phone")
     private String phone;
 
-    @Column(name = "city", nullable = false, length = 255)
+    @NotNull(message = "La ciudad no puede ser nula")
+    @Size(min = 1, max = 255, message = "La ciudad debe tener entre 1 y 255 caracteres")
+    @Column(name = "city")
     private String city;
 
-    @Column(name = "country", nullable = false, length = 255)
+    @NotNull(message = "El país no puede ser nulo")
+    @Size(min = 1, max = 255, message = "El país debe tener entre 1 y 255 caracteres")
+    @Column(name = "country")
     private String country;
 
     @ManyToOne
     @JoinColumn(name = "role_id")
-    @JsonIgnore  // Avoid serializing this property in JSON responses
+    @JsonIgnore  // Evita serializar esta propiedad en las respuestas JSON
     private RoleEntity role;
 
     @Column(name = "registration_date", columnDefinition = "DATETIME DEFAULT CURRENT_TIMESTAMP")
     private LocalDateTime registrationDate;
 
-    // New field for access levels
-    @Enumerated(EnumType.STRING)
-    @Column(name = "access_level")
-    private AccessLevel accessLevel = AccessLevel.NONE; // Default value
+    // Cambia el tipo a String (sin valor por defecto)
+    @Column(name = "user_type")
+    private String userTyp;
 
-    // OneToMany relationship for comments
+    // Relación OneToMany para los comentarios
     @OneToMany(mappedBy = "user", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE}, orphanRemoval = true)
     @JsonIgnore
     private Set<CommentEntity> comments;
@@ -61,17 +69,17 @@ public class UserEntity {
     public void prePersist() {
         if (this.role == null) {
             this.role = new RoleEntity();
-            this.role.setRoleName(RoleEntity.RoleName.OTHER); // Default role
+            this.role.setRoleName(RoleEntity.RoleName.ROLE_USER); // Rol por defecto
         }
         if (this.registrationDate == null) {
             this.registrationDate = LocalDateTime.now();
         }
-        if (this.accessLevel == null) {
-            this.accessLevel = AccessLevel.NONE; // Ensure default value
+        if (this.userTyp == null) {
+            this.userTyp = "Otro"; // Valor por defecto si es null
         }
     }
 
-    // Getters and Setters
+    // Getters y Setters
 
     public Long getId() {
         return id;
@@ -145,12 +153,12 @@ public class UserEntity {
         this.registrationDate = registrationDate;
     }
 
-    public AccessLevel getAccessLevel() {
-        return accessLevel;
+    public String getUserType() {
+        return userTyp;
     }
 
-    public void setAccessLevel(AccessLevel accessLevel) {
-        this.accessLevel = accessLevel;
+    public void setUserType(String userType) {
+        this.userTyp = userType;
     }
 
     public Set<CommentEntity> getComments() {

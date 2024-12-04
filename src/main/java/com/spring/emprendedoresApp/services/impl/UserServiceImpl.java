@@ -1,12 +1,18 @@
 package com.spring.emprendedoresApp.services.impl;
 
+import com.spring.emprendedoresApp.models.dtos.ResponseDTO;
+import com.spring.emprendedoresApp.models.validation.UserValidation;
 import com.spring.emprendedoresApp.persistence.entities.RoleEntity;
 import com.spring.emprendedoresApp.persistence.entities.UserEntity;
-import com.spring.emprendedoresApp.persistence.repositories.UserRepository;
 import com.spring.emprendedoresApp.persistence.repositories.RoleRepository;
+import com.spring.emprendedoresApp.persistence.repositories.UserRepository;
 import com.spring.emprendedoresApp.services.IUserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,91 +20,189 @@ import java.util.Optional;
 @Service
 public class UserServiceImpl implements IUserService {
 
-    // Inyección de dependencias para los repositorios de usuarios y roles
+	@Autowired
+	private UserRepository userRepository;
+
+	@Autowired
+	private RoleRepository roleRepository;
+	
     @Autowired
-    private UserRepository userRepository;
+    private UserValidation userValidation;
 
-    @Autowired
-    private RoleRepository roleRepository;
+	@Override
+	public ResponseDTO createUser(UserEntity user, String roleName) throws Exception {
+		try {
+			ResponseDTO response = userValidation.validate(user);
 
-    // Método para crear un nuevo usuario
-    @Override
-    public UserEntity createUser(UserEntity user, String roleName) {
-        // Convertir el String recibido como parámetro a un valor de tipo RoleName (Enum)
-        RoleEntity.RoleName roleEnum = RoleEntity.RoleName.valueOf(roleName.toUpperCase());
+			if (response.getNumOfError() > 0) {
+				return response;
+			}
 
-        // Buscar el rol correspondiente en el repositorio y asignarlo al usuario
-        user.setRole(roleRepository.findByRoleName(roleEnum));
+			// Validación de usuarios duplicados por email
+			Optional<UserEntity> existingUser = userRepository.findByEmail(user.getEmail());
+			if (existingUser.isPresent()) {
+				response.setNumOfError(1);
+				response.setMessage("El correo ya está registrado!");
+				return response;
+			}
 
-        // Guardar el usuario en la base de datos
-        return userRepository.save(user);
-    }
+			// Validación de usuarios duplicados por username (si es necesario)
+			Optional<UserEntity> existingUsername = userRepository.findByUsername(user.getUsername());
+			if (existingUsername.isPresent()) {
+				response.setNumOfError(1);
+				response.setMessage("El nombre de usuario ya está registrado!");
+				return response;
+			}
 
-    // Método para obtener todos los usuarios
-    @Override
-    public List<UserEntity> getAllUsers() {
-        return userRepository.findAll();  // Devolver todos los usuarios del repositorio
-    }
+			// Validar y asignar el rol recibido en la URL
+			RoleEntity.RoleName roleEnum;
+			try {
+				roleEnum = RoleEntity.RoleName.valueOf(roleName.toUpperCase());
+			} catch (IllegalArgumentException e) {
+				response.setNumOfError(1);
+				response.setMessage("Rol no válido: " + roleName);
+				return response;
+			}
 
-    // Método para obtener un usuario por su ID
-    @Override
-    public Optional<UserEntity> getUserById(Long id) {
-        return userRepository.findById(id);  // Buscar el usuario por ID
-    }
+			// Buscar el rol correspondiente en la base de datos
+			RoleEntity role = roleRepository.findByRoleName(roleEnum);
+			if (role == null) {
+				response.setNumOfError(1);
+				response.setMessage("Rol no encontrado en la base de datos");
+				return response;
+			}
 
-    // Método para actualizar un usuario
-    @Override
-    public UserEntity updateUser(Long id, UserEntity updatedUser) {
-        if (userRepository.existsById(id)) {
-            UserEntity existingUser = userRepository.findById(id).orElse(null);
+			user.setRole(role);
 
-            if (existingUser != null) {
-                // No sobrescribir el rol y la fecha de registro
-                if (updatedUser.getUsername() != null) {
-                    existingUser.setUsername(updatedUser.getUsername());  // Actualizar el nombre de usuario
-                }
-                if (updatedUser.getEmail() != null) {
-                    existingUser.setEmail(updatedUser.getEmail());  // Actualizar el correo
-                }
-                if (updatedUser.getPassword() != null) {
-                    existingUser.setPassword(updatedUser.getPassword());  // Actualizar la contraseña
-                }
-                if (updatedUser.getPhone() != null) {
-                    existingUser.setPhone(updatedUser.getPhone());  // Actualizar el teléfono
-                }
-                if (updatedUser.getCity() != null) {
-                    existingUser.setCity(updatedUser.getCity());  // Actualizar la ciudad
-                }
-                if (updatedUser.getCountry() != null) {
-                    existingUser.setCountry(updatedUser.getCountry());  // Actualizar el país
-                }
-                // No se actualiza el rol ni la fecha de registro
+			// Encriptar la contraseña
+			BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+			user.setPassword(encoder.encode(user.getPassword()));
 
-                // Guardar el usuario con los campos actualizados
-                return userRepository.save(existingUser);
-            }
-        }
-        return null;  // Si el usuario no existe, retornar null
-    }
+			// Guardar el usuario con el rol asignado
+			userRepository.save(user);
 
+			response.setMessage("Usuario creado exitosamente!");
+			return response;
 
-    // Método para eliminar un usuario
-    @Override
-    public boolean deleteUser(Long id) {
-        if (userRepository.existsById(id)) {
-            userRepository.deleteById(id);  // Eliminar el usuario por ID
-            return true;  // Indicar que la eliminación fue exitosa
-        }
-        return false;  // Si el usuario no existe, retornar false
-    }
+		} catch (Exception e) {
+			throw new Exception(e.toString());
+		}
+	}
 
-    // Método para obtener usuarios por su rol
-    @Override
-    public List<UserEntity> getUsersByRole(String roleName) {
-        // Convertir el String recibido como parámetro a un valor de tipo RoleName (Enum)
-        RoleEntity.RoleName roleEnum = RoleEntity.RoleName.valueOf(roleName.toUpperCase());
+	// Método para obtener todos los usuarios
+	@Override
+	public List<UserEntity> getAllUsers() {
+		return userRepository.findAll();
+	}
 
-        // Buscar y devolver los usuarios con el rol correspondiente
-        return userRepository.findByRole_RoleName(roleEnum);  // Pasar el Enum al repositorio
-    }
+	// Método para obtener un usuario por su ID
+	@Override
+	public Optional<UserEntity> getUserById(Long id) {
+		if (id == null) {
+			throw new IllegalArgumentException("El ID del usuario no puede ser nulo");
+		}
+		return userRepository.findById(id);
+	}
+
+	// Método para actualizar un usuario completamente (PUT)
+	@Override
+	public UserEntity updateUser(Long id, UserEntity updatedUser) {
+		if (id == null || updatedUser == null) {
+			throw new IllegalArgumentException("El ID del usuario y los datos a actualizar no pueden ser nulos");
+		}
+		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+
+		UserEntity existingUser = userRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("El usuario con el ID especificado no existe"));
+
+		// Actualizar los campos específicos si no son nulos
+		if (updatedUser.getUsername() != null) {
+			existingUser.setUsername(updatedUser.getUsername());
+		}
+		if (updatedUser.getEmail() != null) {
+			existingUser.setEmail(updatedUser.getEmail());
+		}
+		if (updatedUser.getPassword() != null) {
+			existingUser.setPassword(encoder.encode(updatedUser.getPassword())); // Encriptar la nueva contraseña
+		}
+		if (updatedUser.getPhone() != null) {
+			existingUser.setPhone(updatedUser.getPhone());
+		}
+		if (updatedUser.getCity() != null) {
+			existingUser.setCity(updatedUser.getCity());
+		}
+		if (updatedUser.getCountry() != null) {
+			existingUser.setCountry(updatedUser.getCountry());
+		}
+
+		// Agregar lógica para cambiar el tipo de usuario solo en el PUT (si es
+		// necesario)
+		if (updatedUser.getUserType() != null) {
+			existingUser.setUserType(updatedUser.getUserType());
+		}
+
+		// Guardar el usuario actualizado
+		return userRepository.save(existingUser);
+	}
+
+	// Método para actualizar parcialmente un usuario (PATCH)
+	@Override
+	public UserEntity updatePartialUser(Long id, UserEntity updatedUser) {
+		if (id == null || updatedUser == null) {
+			throw new IllegalArgumentException("El ID del usuario y los datos a actualizar no pueden ser nulos");
+		}
+		BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+
+		UserEntity existingUser = userRepository.findById(id)
+				.orElseThrow(() -> new IllegalArgumentException("El usuario con el ID especificado no existe"));
+
+		// Actualizar solo los campos no nulos
+		if (updatedUser.getUsername() != null) {
+			existingUser.setUsername(updatedUser.getUsername());
+		}
+		if (updatedUser.getEmail() != null) {
+			existingUser.setEmail(updatedUser.getEmail());
+		}
+		if (updatedUser.getPassword() != null) {
+			existingUser.setPassword(encoder.encode(updatedUser.getPassword())); // Encriptar la nueva contraseña
+		}
+		if (updatedUser.getPhone() != null) {
+			existingUser.setPhone(updatedUser.getPhone());
+		}
+		if (updatedUser.getCity() != null) {
+			existingUser.setCity(updatedUser.getCity());
+		}
+		if (updatedUser.getCountry() != null) {
+			existingUser.setCountry(updatedUser.getCountry());
+		}
+
+		// No se permite cambiar el tipo de usuario en el PATCH
+		// No se realiza ninguna modificación en el userType en el método PATCH
+
+		// Guardar el usuario actualizado
+		return userRepository.save(existingUser);
+	}
+
+	// Método para eliminar un usuario
+	@Override
+	public boolean deleteUser(Long id) {
+		if (id == null) {
+			throw new IllegalArgumentException("El ID del usuario no puede ser nulo");
+		}
+
+		if (userRepository.existsById(id)) {
+			userRepository.deleteById(id);
+			return true;
+		} else {
+			throw new IllegalArgumentException("El usuario con el ID especificado no existe");
+		}
+	}
+
+	// Método para obtener usuarios paginados
+	@Transactional(readOnly = true)
+	@Override
+	public Page<UserEntity> findAll(Pageable pageable) {
+		return userRepository.findAll(pageable);
+	}
+
 }
